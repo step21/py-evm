@@ -1,69 +1,83 @@
 import pytest
 
-from evm.db import (
-    get_db_backend,
+
+from eth.chains.base import (
+    Chain,
+    MiningChain,
 )
-
-
-from evm import constants
-from evm.chains.mainnet.constants import (
-    HOMESTEAD_MAINNET_BLOCK
+from eth.constants import (
+    GENESIS_BLOCK_NUMBER,
+    GENESIS_DIFFICULTY,
+    GENESIS_GAS_LIMIT,
 )
-from evm import Chain
-
-from evm.exceptions import (
-    ValidationError,
+from eth.db.chain import ChainDB
+from eth.exceptions import (
     VMNotFound,
 )
-from evm.rlp.headers import (
+from eth.rlp.headers import (
     BlockHeader,
 )
-from evm.vm.forks.frontier import FrontierVM
-from evm.vm.forks.homestead import HomesteadVM
+from eth.vm.base import VM
 
 
-def test_get_vm_class_for_block_number():
-    chain_class = Chain.configure(
-        name='TestChain',
-        vm_configuration=(
-            (constants.GENESIS_BLOCK_NUMBER, FrontierVM),
-            (HOMESTEAD_MAINNET_BLOCK, HomesteadVM),
-        ),
+@pytest.fixture
+def genesis_header():
+    return BlockHeader(
+        difficulty=GENESIS_DIFFICULTY,
+        block_number=GENESIS_BLOCK_NUMBER,
+        gas_limit=GENESIS_GAS_LIMIT,
     )
-    chain = chain_class(get_db_backend(), BlockHeader(1, 0, 100))
-    assert chain.get_vm_class_for_block_number(
-        constants.GENESIS_BLOCK_NUMBER,) == FrontierVM
-    assert chain.get_vm_class_for_block_number(
-        HOMESTEAD_MAINNET_BLOCK - 1) == FrontierVM
-    assert chain.get_vm_class_for_block_number(
-        HOMESTEAD_MAINNET_BLOCK) == HomesteadVM
-    assert chain.get_vm_class_for_block_number(
-        HOMESTEAD_MAINNET_BLOCK + 1) == HomesteadVM
 
 
-def test_invalid_if_no_vm_configuration():
-    chain_class = Chain.configure('TestChain', vm_configuration=())
+class BaseVMForTesting(VM):
+    @classmethod
+    def create_header_from_parent(cls, parent_header, **header_params):
+        pass
+
+
+class VM_A(BaseVMForTesting):
+    pass
+
+
+class VM_B(VM_A):
+    pass
+
+
+class ChainForTesting(Chain):
+    vm_configuration = (
+        (0, VM_A),
+        (10, VM_B),
+    )
+
+
+@pytest.fixture()
+def chaindb(base_db):
+    return ChainDB(base_db)
+
+
+def test_header_chain_get_vm_class_for_block_number(base_db, genesis_header):
+    chain = ChainForTesting.from_genesis_header(base_db, genesis_header)
+
+    assert chain.get_vm_class_for_block_number(0) is VM_A
+
+    for num in range(1, 10):
+        assert chain.get_vm_class_for_block_number(num) is VM_A
+
+    assert chain.get_vm_class_for_block_number(10) is VM_B
+
+    for num in range(11, 100, 5):
+        assert chain.get_vm_class_for_block_number(num) is VM_B
+
+
+def test_header_chain_invalid_if_no_vm_configuration(base_db, genesis_header):
+    chain_class = MiningChain.configure('ChainNoEmptyConfiguration', vm_configuration=())
     with pytest.raises(ValueError):
-        chain_class(get_db_backend(), BlockHeader(1, 0, 100))
+        chain_class(base_db, genesis_header)
 
 
-def test_vm_not_found_if_no_matching_block_number():
-    chain_class = Chain.configure('TestChain', vm_configuration=(
-        (10, FrontierVM),
+def test_vm_not_found_if_no_matching_block_number(genesis_header):
+    chain_class = Chain.configure('ChainStartsAtBlock10', vm_configuration=(
+        (10, VM_A),
     ))
-    chain = chain_class(get_db_backend(), BlockHeader(1, 0, 100))
     with pytest.raises(VMNotFound):
-        chain.get_vm_class_for_block_number(9)
-
-
-def test_configure_invalid_block_number_in_vm_configuration():
-    with pytest.raises(ValidationError):
-        Chain.configure('TestChain', vm_configuration=[(-1, FrontierVM)])
-
-
-def test_configure_duplicate_block_numbers_in_vm_configuration():
-    with pytest.raises(ValidationError):
-        Chain.configure('TestChain', vm_configuration=[
-            (0, FrontierVM),
-            (0, HomesteadVM),
-        ])
+        chain_class.get_vm_class_for_block_number(9)

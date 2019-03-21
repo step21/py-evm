@@ -1,14 +1,17 @@
 import pytest
 
-from evm.vm.stack import (
-    Stack,
-)
-from evm.exceptions import (
-    FullStack,
-    InsufficientStack,
+from eth_utils import (
     ValidationError,
 )
-from evm.constants import (
+
+from eth.vm.stack import (
+    Stack,
+)
+from eth.exceptions import (
+    FullStack,
+    InsufficientStack,
+)
+from eth.constants import (
     UINT256,
     BYTES,
     SECPK1_N,
@@ -52,7 +55,7 @@ def test_push_does_not_allow_stack_to_exceed_1024_items(stack):
 
 def test_dup_does_not_allow_stack_to_exceed_1024_items(stack):
     stack.push(1)
-    for num in range(1023):
+    for _ in range(1023):
         stack.dup(1)
     assert len(stack.values) == 1024
     with pytest.raises(FullStack):
@@ -70,7 +73,7 @@ def test_dup_does_not_allow_stack_to_exceed_1024_items(stack):
 def test_pop_returns_latest_stack_item(stack, items, type_hint):
     for each in items:
         stack.push(each)
-    assert stack.pop(type_hint=type_hint) == items[-1]
+    assert stack.pop(num_items=1, type_hint=type_hint) == items[-1]
 
 
 @pytest.mark.parametrize(
@@ -84,7 +87,7 @@ def test_pop_returns_latest_stack_item(stack, items, type_hint):
 def test_pop_typecasts_correctly_based_off_type_hint(stack, value, type_hint, type, is_valid):
     stack.push(value)
     if is_valid:
-        assert isinstance(stack.pop(type_hint=type_hint), type)
+        assert isinstance(stack.pop(num_items=1, type_hint=type_hint), type)
     else:
         with pytest.raises(TypeError):
             stack.pop(type_hint=type_hint)
@@ -112,7 +115,7 @@ def test_dup_operates_correctly(stack):
 
 def test_pop_raises_InsufficientStack_appropriately(stack):
     with pytest.raises(InsufficientStack):
-        stack.pop(type_hint=UINT256)
+        stack.pop(num_items=1, type_hint=UINT256)
 
 
 def test_swap_raises_InsufficientStack_appropriately(stack):

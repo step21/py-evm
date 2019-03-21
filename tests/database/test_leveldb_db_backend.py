@@ -1,6 +1,8 @@
 import pytest
-from evm.db.backends.memory import MemoryDB
-from evm.db import (
+
+from eth.db.backends.memory import MemoryDB
+from eth.db.atomic import AtomicDB
+from eth.db import (
     get_db_backend,
 )
 
@@ -12,7 +14,7 @@ pytest.importorskip('leveldb')
 @pytest.fixture
 def config_env(monkeypatch):
     monkeypatch.setenv('CHAIN_DB_BACKEND_CLASS',
-                       'evm.db.backends.level.LevelDB')
+                       'eth.db.backends.level.LevelDB')
 
 
 @pytest.fixture
@@ -24,6 +26,11 @@ def level_db(config_env, tmpdir):
 @pytest.fixture
 def memory_db():
     return MemoryDB()
+
+
+@pytest.fixture
+def atomic_db():
+    return AtomicDB()
 
 
 def test_raises_if_db_path_is_not_specified(config_env):

@@ -23,8 +23,7 @@ clean-pyc:
 	find . -name '*~' -exec rm -f {} +
 
 lint:
-	flake8 evm
-	flake8 tests --exclude=""
+	tox -epy3{6,5}-lint
 
 test:
 	py.test --tb native tests
@@ -33,22 +32,37 @@ test-all:
 	tox
 
 coverage:
-	coverage run --source evm
+	coverage run --source eth
 	coverage report -m
 	coverage html
 	open htmlcov/index.html
 
 build-docs:
-	cd docs/; sphinx-build -T -E . _build/html
+	cd docs/; sphinx-build -W -T -E . _build/html
+
+doctest:
+	cd docs/; sphinx-build -T -b doctest . _build/doctest
+
+validate-docs: build-docs doctest
 
 docs: build-docs
 	open docs/_build/html/index.html
 
 linux-docs: build-docs
-	xdg-open docs/_build/html/index.html
+	readlink -f docs/_build/html/index.html
+
+package: clean
+	python setup.py sdist bdist_wheel
+	python scripts/release/test_package.py
 
 release: clean
-	python setup.py sdist bdist_wheel upload
+	CURRENT_SIGN_SETTING=$(git config commit.gpgSign)
+	git config commit.gpgSign true
+	bumpversion $(bump)
+	git push upstream && git push upstream --tags
+	python setup.py sdist bdist_wheel
+	twine upload dist/*
+	git config commit.gpgSign "$(CURRENT_SIGN_SETTING)"
 
 sdist: clean
 	python setup.py sdist bdist_wheel

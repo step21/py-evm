@@ -1,6 +1,6 @@
 import pytest
 
-from evm.utils.env import (
+from eth._utils.env import (
     get,
 )
 

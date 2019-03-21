@@ -2,40 +2,48 @@ import os
 
 import pytest
 
-from evm.db import (
+from eth_utils import (
+    to_bytes,
+)
+
+from eth.db import (
     get_db_backend,
 )
-from evm.db.chain import BaseChainDB
+from eth.db.chain import ChainDB
 
-from eth_utils import (
-    keccak,
-)
+from eth_hash.auto import keccak
 
-from evm.exceptions import (
+from eth.exceptions import (
     VMError,
 )
-from evm.rlp.headers import (
+from eth.rlp.headers import (
     BlockHeader,
 )
-from evm.vm.forks import (
-    HomesteadVM,
-)
-from evm.vm.forks.homestead.computation import (
-    HomesteadComputation,
-)
-from evm.vm.forks.homestead.vm_state import HomesteadVMState
-from evm.vm import (
-    Message,
-)
-
-from evm.utils.fixture_tests import (
-    normalize_vmtest_fixture,
+from eth.tools.fixtures import (
+    filter_fixtures,
     generate_fixture_tests,
     load_fixture,
-    filter_fixtures,
-    setup_state_db,
-    verify_state_db,
+    setup_account_db,
+    verify_account_db,
+)
+from eth.tools._utils.normalization import (
+    normalize_vmtest_fixture,
+)
+from eth.tools._utils.hashing import (
     hash_log_entries,
+)
+from eth.vm.forks import (
+    HomesteadVM,
+)
+from eth.vm.forks.homestead.computation import (
+    HomesteadComputation,
+)
+from eth.vm.forks.homestead.state import HomesteadState
+from eth.vm.message import (
+    Message,
+)
+from eth.vm.transaction_context import (
+    BaseTransactionContext,
 )
 
 
@@ -99,22 +107,22 @@ def get_block_hash_for_testing(self, block_number):
     elif block_number < self.block_number - 256:
         return b''
     else:
-        return keccak("{0}".format(block_number))
+        return keccak(to_bytes(text="{0}".format(block_number)))
 
 
 HomesteadComputationForTesting = HomesteadComputation.configure(
-    name='HomesteadComputationForTesting',
+    __name__='HomesteadComputationForTesting',
     apply_message=apply_message_for_testing,
     apply_create_message=apply_create_message_for_testing,
 )
-HomesteadVMStateForTesting = HomesteadVMState.configure(
-    name='HomesteadVMStateForTesting',
+HomesteadStateForTesting = HomesteadState.configure(
+    __name__='HomesteadStateForTesting',
     get_ancestor_hash=get_block_hash_for_testing,
     computation_class=HomesteadComputationForTesting,
 )
 HomesteadVMForTesting = HomesteadVM.configure(
-    name='HomesteadVMForTesting',
-    _state_class=HomesteadVMStateForTesting,
+    __name__='HomesteadVMForTesting',
+    _state_class=HomesteadStateForTesting,
 )
 
 
@@ -132,8 +140,48 @@ def vm_class(request):
         assert False, "Unsupported VM: {0}".format(request.param)
 
 
-def test_vm_fixtures(fixture, vm_class):
-    chaindb = BaseChainDB(get_db_backend())
+def fixture_to_computation(fixture, code, vm):
+    message = Message(
+        to=fixture['exec']['address'],
+        sender=fixture['exec']['caller'],
+        value=fixture['exec']['value'],
+        data=fixture['exec']['data'],
+        code=code,
+        gas=fixture['exec']['gas'],
+    )
+    transaction_context = BaseTransactionContext(
+        origin=fixture['exec']['origin'],
+        gas_price=fixture['exec']['gasPrice'],
+    )
+    return vm.state.get_computation(message, transaction_context).apply_computation(
+        vm.state,
+        message,
+        transaction_context,
+    )
+
+
+def fixture_to_bytecode_computation(fixture, code, vm):
+    return vm.execute_bytecode(
+        origin=fixture['exec']['origin'],
+        gas_price=fixture['exec']['gasPrice'],
+        gas=fixture['exec']['gas'],
+        to=fixture['exec']['address'],
+        sender=fixture['exec']['caller'],
+        value=fixture['exec']['value'],
+        data=fixture['exec']['data'],
+        code=code,
+    )
+
+
+@pytest.mark.parametrize(
+    'computation_getter',
+    (
+        fixture_to_bytecode_computation,
+        fixture_to_computation,
+    ),
+)
+def test_vm_fixtures(fixture, vm_class, computation_getter):
+    chaindb = ChainDB(get_db_backend())
     header = BlockHeader(
         coinbase=fixture['env']['currentCoinbase'],
         difficulty=fixture['env']['currentDifficulty'],
@@ -142,29 +190,33 @@ def test_vm_fixtures(fixture, vm_class):
         timestamp=fixture['env']['currentTimestamp'],
     )
     vm = vm_class(header=header, chaindb=chaindb)
-    vm_state = vm.state
-    with vm_state.state_db() as state_db:
-        setup_state_db(fixture['pre'], state_db)
-        code = state_db.get_code(fixture['exec']['address'])
+    state = vm.state
+    setup_account_db(fixture['pre'], state.account_db)
+    code = state.account_db.get_code(fixture['exec']['address'])
     # Update state_root manually
-    vm.block.header.state_root = vm_state.state_root
+    vm.block = vm.block.copy(header=vm.block.header.copy(state_root=state.state_root))
 
     message = Message(
-        origin=fixture['exec']['origin'],
         to=fixture['exec']['address'],
         sender=fixture['exec']['caller'],
         value=fixture['exec']['value'],
         data=fixture['exec']['data'],
         code=code,
         gas=fixture['exec']['gas'],
+    )
+    transaction_context = BaseTransactionContext(
+        origin=fixture['exec']['origin'],
         gas_price=fixture['exec']['gasPrice'],
     )
-    computation = vm.state.get_computation(message).apply_computation(
+    computation = vm.state.get_computation(message, transaction_context).apply_computation(
         vm.state,
         message,
+        transaction_context,
     )
     # Update state_root manually
-    vm.block.header.state_root = computation.vm_state.state_root
+    vm.block = vm.block.copy(
+        header=vm.block.header.copy(state_root=computation.state.state_root),
+    )
 
     if 'post' in fixture:
         #
@@ -183,7 +235,7 @@ def test_vm_fixtures(fixture, vm_class):
         expected_output = fixture['out']
         assert computation.output == expected_output
 
-        gas_meter = computation.gas_meter
+        gas_meter = computation._gas_meter
 
         expected_gas_remaining = fixture['gas']
         actual_gas_remaining = gas_meter.gas_remaining
@@ -204,14 +256,13 @@ def test_vm_fixtures(fixture, vm_class):
             assert data == child_computation.msg.data or child_computation.msg.code
             assert gas_limit == child_computation.msg.gas
             assert value == child_computation.msg.value
-        post_state = fixture['post']
+        expected_account_db = fixture['post']
     else:
         #
         # Error checks
         #
         assert computation.is_error
         assert isinstance(computation._error, VMError)
-        post_state = fixture['pre']
+        expected_account_db = fixture['pre']
 
-    with vm.state.state_db(read_only=True) as state_db:
-        verify_state_db(post_state, state_db)
+    verify_account_db(expected_account_db, vm.state.account_db)

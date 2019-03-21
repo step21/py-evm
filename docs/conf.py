@@ -41,9 +41,15 @@ needs_sphinx = '1.5'
 extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.autodoc',
+    'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinxcontrib.asyncio',
 ]
+
+autodoc_default_options = {
+    'undoc-members': None,
+}
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -59,7 +65,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = about['__name__']
-copyright = '2017, Piper Merriam, Jason Carver'
+copyright = '2017-2018 Ethereum Foundation'
 author = about['__author__']
 
 # The version info for the project you're documenting, acts as replacement for
@@ -111,7 +117,7 @@ html_theme = 'sphinx_rtd_theme'
 # html_static_path = ['_static']
 
 # Allows the mod index to function more helpfully (not everything under 'e')
-modindex_common_prefix = ['evm.']
+modindex_common_prefix = ['eth.']
 
 ##
 #  Below be monsters, for now.  You've been warned.
@@ -176,29 +182,16 @@ texinfo_documents = [
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.5', None),
+    'eth-typing': ('https://eth-typing.readthedocs.io/en/latest', None),
 }
 
-# -- autodoc on any sphinx-build, to support RTD ---------------------------
+# -- Doctest configuration ----------------------------------------
 
+import doctest
 
-def run_apidoc(_):
-    from sphinx.apidoc import main
-    import os
-    import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    cur_dir = os.path.abspath(os.path.dirname(__file__))
-    package = os.path.join(cur_dir, "..")
-    main([
-        None,
-        '-o',
-        cur_dir,
-        '--force',
-        package,
-        package + "/tests/*",
-        package + "/setup.py",
-        package + '/.eggs/*',
-    ])
-
-
-def setup(app):
-    app.connect('builder-inited', run_apidoc)
+doctest_default_flags = (0
+    | doctest.DONT_ACCEPT_TRUE_FOR_1
+    | doctest.ELLIPSIS
+    | doctest.IGNORE_EXCEPTION_DETAIL
+    | doctest.NORMALIZE_WHITESPACE
+)

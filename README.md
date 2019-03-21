@@ -1,98 +1,61 @@
-# Python Implementation of the EVM
+# Python Implementation of the Ethereum protocol
 
 [![Join the chat at https://gitter.im/ethereum/py-evm](https://badges.gitter.im/ethereum/py-evm.svg)](https://gitter.im/ethereum/py-evm)
-[![Documentation Status](https://readthedocs.org/projects/py-evm/badge/?version=latest)](http://py-evm.readthedocs.io/en/latest/?badge=latest)
-
-[Documentation hosted by ReadTheDocs](http://py-evm.readthedocs.io/en/latest/)
+[![Documentation Status](https://readthedocs.org/projects/py-evm/badge/?version=latest)](https://py-evm.readthedocs.io/en/latest/?badge=latest)
 
 
-## Introducing Py-EVM
+## Py-EVM
 
-Py-EVM is a new implementation of the Ethereum Virtual Machine written in
-python. It is currently in active development but is quickly progressing
-through the test suite provided by ethereum/tests. I have Vitalik, and the
-existing PyEthereum code to thank for the quick progress I’ve made as many
-design decisions were inspired, or even directly ported from the PyEthereum
-codebase.
+Py-EVM is a new implementation of the Ethereum protocol in Python. It contains the low level
+primitives for the existing Ethereum 1.0 chain as well as emerging support for the upcoming
+Ethereum 2.0 / Serenity spec.
 
-Py-EVM aims to eventually become the defacto python implementation of the EVM,
-enabling a wide array of use cases for both public and private chains.
-Development will focus on creating an EVM with a well defined API, friendly and
-easy to digest documentation which can be run as a fully functional mainnet
-node.
+### Goals
 
-### Step 1: Alpha Release
+Py-EVM aims to eventually become the defacto Python implementation of the Ethereum protocol,
+enabling a wide array of use cases for both public and private chains. 
 
-The plan is to begin with an MVP, alpha-level release that is suitable for
-testing purposes. We’ll be looking for early adopters to provide feedback on
-our architecture and API choices as well as general feedback and bug finding.
+In particular Py-EVM aims to:
 
-#### Blog posts:
+- be a reference implementation of the Ethereum 1.0 and 2.0 implementation in one of the most widely used and understood languages, Python.
 
-- https://medium.com/@pipermerriam/py-evm-part-1-origins-25d9ad390b
+- be easy to understand and modifiable
 
+- have clear and simple APIs
 
-## Development
-Py-EVM depends on a submodule of the common tests across all clients,
-so you need to clone the repo with the `--recursive` flag. Example:
+- come with solid, friendly documentation
 
-```sh
-git clone --recursive git@github.com:ethereum/py-evm.git
-```
+- deliver the low level primitives to build various clients on top (including *full* and *light* clients)
 
-Then install the required python packages via:
+- be highly flexible to support both research as well as alternate use cases like private chains.
 
-```sh
-pip install -e . -r requirements-dev.txt
-```
+## Trinity
 
+While Py-EVM provides the low level APIs of the Ethereum protocol, it does not aim to implement a
+full or light node directly.
 
-### Running the tests
+### Goals
 
-You can run the tests with:
+- provide a reference implementation for an Ethereum 1.0 node (alpha)
 
-```sh
-py.test tests
-```
+- support "full" and "light" modes
 
-Or you can install `tox` to run the full test suite.
+- fully support mainnet as well as several testnets
+
+- provide a reference implementation of an Ethereum 2.0 / Serenity beacon node (pre-alpha)
+
+- provide a reference implementation of an Ethereum 2.0 / Sereneity validator node (pre-alpha)
 
 
-### Releasing
+## Quickstart
 
-Pandoc is required for transforming the markdown README to the proper format to
-render correctly on pypi.
+[Get started in 5 minutes](https://py-evm.readthedocs.io/en/latest/quickstart.html)
 
-For Debian-like systems:
+## Documentation
 
-```
-apt install pandoc
-```
+Check out the [documentation on our official website](https://py-evm.readthedocs.io/en/latest/)
 
-Or on OSX:
+## Want to help?
 
-```sh
-brew install pandoc
-```
-
-To release a new version:
-
-```sh
-bumpversion $$VERSION_PART_TO_BUMP$$
-git push && git push --tags
-make release
-```
-
-
-#### How to bumpversion
-
-The version format for this repo is `{major}.{minor}.{patch}` for stable, and
-`{major}.{minor}.{patch}-{stage}.{devnum}` for unstable (`stage` can be alpha or beta).
-
-To issue the next version in line, use bumpversion and specify which part to bump,
-like `bumpversion minor` or `bumpversion devnum`.
-
-If you are in a beta version, `bumpversion stage` will switch to a stable.
-
-To issue an unstable version when the current version is stable, specify the
-new version explicitly, like `bumpversion --new-version 4.0.0-alpha.1 devnum`
+Want to file a bug, contribute some code, or improve documentation? Excellent! Read up on our
+guidelines for [contributing](https://py-evm.readthedocs.io/en/latest/contributing.html) and then check out one of our issues that are labeled [Good First Issue](https://github.com/ethereum/py-evm/issues?q=is%3Aissue+is%3Aopen+label%3A%22Good+First+Issue%22).

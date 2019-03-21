@@ -2,35 +2,58 @@ import pytest
 
 import enum
 
-from evm.chains.tester import (
+from eth.vm.forks.frontier import FrontierVM
+from eth.chains.tester import (
     _generate_vm_configuration,
 )
 
 
 class Forks(enum.Enum):
-    Frontier = 0
-    Homestead = 1
-    TangerineWhistle = 2
-    SpuriousDragon = 3
+    Custom = 'CustomFrontier'
+    Frontier = 'Frontier'
+    Homestead = 'Homestead'
+    TangerineWhistle = 'TangerineWhistle'
+    SpuriousDragon = 'SpuriousDragon'
+    Byzantium = 'Byzantium'
+    Constantinople = 'Constantinople'
+    Petersburg = 'Petersburg'
+
+
+class CustomFrontierVM(FrontierVM):
+    pass
 
 
 @pytest.mark.parametrize(
-    "kwargs,expected",
+    "args,kwargs,expected",
     (
         (
-            dict(),
-            ((0, Forks.SpuriousDragon),),
+            tuple(),
+            {},
+            ((0, Forks.Petersburg),),
         ),
         (
-            dict(spurious_dragon_block=1),
+            ((0, 'tangerine-whistle'), (1, 'spurious-dragon')),
+            {},
             ((0, Forks.TangerineWhistle), (1, Forks.SpuriousDragon)),
         ),
         (
-            dict(tangerine_whistle_start_block=1, spurious_dragon_block=2),
+            ((1, 'tangerine-whistle'), (2, 'spurious-dragon')),
+            {},
+            ((0, Forks.Frontier), (1, Forks.TangerineWhistle), (2, Forks.SpuriousDragon)),
+        ),
+        (
+            ((0, CustomFrontierVM), (1, 'spurious-dragon')),
+            {},
+            ((0, Forks.Custom), (1, Forks.SpuriousDragon)),
+        ),
+        (
+            ((0, 'homestead'), (1, 'tangerine-whistle'), (2, 'spurious-dragon')),
+            {},
             ((0, Forks.Homestead), (1, Forks.TangerineWhistle), (2, Forks.SpuriousDragon)),
         ),
         (
-            dict(homestead_start_block=1, tangerine_whistle_start_block=2, spurious_dragon_block=3),
+            ((0, 'frontier'), (1, 'homestead'), (2, 'tangerine-whistle'), (3, 'spurious-dragon')),
+            {},
             (
                 (0, Forks.Frontier),
                 (1, Forks.Homestead),
@@ -39,7 +62,8 @@ class Forks(enum.Enum):
             ),
         ),
         (
-            dict(homestead_start_block=1, spurious_dragon_block=3),
+            ((0, 'frontier'), (1, 'homestead'), (3, 'spurious-dragon')),
+            {},
             (
                 (0, Forks.Frontier),
                 (1, Forks.Homestead),
@@ -47,29 +71,66 @@ class Forks(enum.Enum):
             ),
         ),
         (
-            dict(tangerine_whistle_start_block=1),
+            ((0, 'homestead'), (1, 'tangerine-whistle')),
+            {},
             ((0, Forks.Homestead), (1, Forks.TangerineWhistle)),
         ),
         (
-            dict(homestead_start_block=1),
+            ((0, 'frontier'), (1, 'homestead')),
+            {},
             ((0, Forks.Frontier), (1, Forks.Homestead)),
         ),
         (
-            dict(homestead_start_block=1, dao_start_block=2),
+            ((1, 'homestead'),),
+            {},
             ((0, Forks.Frontier), (1, Forks.Homestead)),
         ),
         (
-            dict(homestead_start_block=1, dao_start_block=False),
+            ((0, 'frontier'), (1, 'homestead')),
+            {'dao_start_block': 2},
             ((0, Forks.Frontier), (1, Forks.Homestead)),
         ),
         (
-            dict(homestead_start_block=1, tangerine_whistle_start_block=2),
+            ((0, 'frontier'), (1, 'homestead')),
+            {'dao_start_block': False},
+            ((0, Forks.Frontier), (1, Forks.Homestead)),
+        ),
+        (
+            ((0, 'frontier'), (1, 'homestead'), (2, 'tangerine-whistle')),
+            {},
             ((0, Forks.Frontier), (1, Forks.Homestead), (2, Forks.TangerineWhistle)),
+        ),
+        (
+            ((0, 'frontier'), (1, 'homestead'), (2, 'tangerine-whistle'), (3, 'byzantium')),
+            {},
+            (
+                (0, Forks.Frontier),
+                (1, Forks.Homestead),
+                (2, Forks.TangerineWhistle),
+                (3, Forks.Byzantium),
+            ),
+        ),
+        (
+            (
+                (0, 'frontier'),
+                (1, 'homestead'),
+                (2, 'tangerine-whistle'),
+                (3, 'byzantium'),
+                (5, 'petersburg')
+            ),
+            {},
+            (
+                (0, Forks.Frontier),
+                (1, Forks.Homestead),
+                (2, Forks.TangerineWhistle),
+                (3, Forks.Byzantium),
+                (5, Forks.Petersburg),
+            ),
         ),
     ),
 )
-def test_generate_vm_configuration(kwargs, expected):
-    actual = _generate_vm_configuration(**kwargs)
+def test_generate_vm_configuration(args, kwargs, expected):
+    actual = _generate_vm_configuration(*args, **kwargs)
     assert len(actual) == len(expected)
 
     for left, right in zip(actual, expected):
@@ -78,22 +139,15 @@ def test_generate_vm_configuration(kwargs, expected):
 
         assert left_block == right_block
 
-        if right_vm == Forks.Frontier:
-            assert 'Frontier' in left_vm.__name__
-        elif right_vm == Forks.Homestead:
-            assert 'Homestead' in left_vm.__name__
+        assert right_vm.value in left_vm.__name__
+
+        if right_vm == Forks.Homestead:
             dao_start_block = kwargs.get('dao_start_block')
             if dao_start_block is False:
                 assert left_vm.support_dao_fork is False
             elif dao_start_block is None:
                 assert left_vm.support_dao_fork is True
-                assert left_vm.dao_fork_block_number == right_block
+                assert left_vm.get_dao_fork_block_number() == right_block
             else:
                 assert left_vm.support_dao_fork is True
-                assert left_vm.dao_fork_block_number == dao_start_block
-        elif right_vm == Forks.TangerineWhistle:
-            assert 'TangerineWhistle' in left_vm.__name__
-        elif right_vm == Forks.SpuriousDragon:
-            assert 'SpuriousDragon' in left_vm.__name__
-        else:
-            assert False, "Invariant"
+                assert left_vm.get_dao_fork_block_number() == dao_start_block
